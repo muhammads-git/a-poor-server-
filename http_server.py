@@ -1,7 +1,7 @@
 import socket
 import time
 import threading
-
+from concurrent.futures import ThreadPoolExecutor
 
 # initialize a socket obj
 so = socket.socket()
@@ -9,6 +9,9 @@ so.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
 so.bind(('127.0.0.1',9000))
 # listen means now the socket is looking for request, and ready to take requetst
 so.listen()
+
+# initialize pool
+pool = ThreadPoolExecutor(max_workers=5)
 
 # HANDLE CLIENT
 def handle_client(conn):
@@ -20,9 +23,7 @@ def handle_client(conn):
 while True:
    conn,addr = so.accept()
    # fire a THREAD
-   new_thread = threading.Thread(target=handle_client,args=(conn,))
-   new_thread.start()
+   # new_thread = threading.Thread(target=handle_client,args=(conn,))  # mulit-threading
+   # new_thread.start()
+   pool.submit(handle_client,conn)
 
-
-# we are now going to implement the threadpoolexecutor to limit the threads
-# so to minimise cpu thrashing swapping and save its cyle
