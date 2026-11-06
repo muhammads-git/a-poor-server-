@@ -3,8 +3,8 @@ import urllib.request
 import time
 
 URL = "http://127.0.0.1:9000" # Aapke server ka address
-TOTAL_REQUESTS = 200          # Total kitne fire karne hain
-CONCURRENCY_LIMIT = 100       # Ek sath (parallel) kitne bomb girengay
+TOTAL_REQUESTS = 2000          # Total kitne fire karne hain
+CONCURRENCY_LIMIT = 2000     # Ek sath (parallel) kitne bomb girengay
 
 def send_request(request_id):
     try:
