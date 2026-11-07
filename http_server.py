@@ -20,28 +20,21 @@ keep moving... dont freeze
 """
 so.setblocking(False)
 
-
-# initialize pool
-# pool = ThreadPoolExecutor(max_workers=5)
-
-
 # inititaliz the demultiplexer classs
 demultiplexer = selectors.DefaultSelector()
-
 
 # HANDLE CLIENT
 def handle_client(conn):
    try:
-
-      data = conn.recv(4096).decode()
+      conn.recv(4096).decode()
       conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 32\r\n\r\nHello, this is Muhammads server.")
-      print(f"Processed: {data.strip()}")
-      conn.close()
+      # print(f"Processed: {data.strip()}")
    except Exception as e:
       print(f'Error: {e}')
    finally:
       # unregister this client from demultiplexers, cause its done
       demultiplexer.unregister(conn)
+      conn.close()
 
 
 ## a new function to accept new connections and handing to demultiplexerss
@@ -64,12 +57,6 @@ print('Single-Threaded Event loop is initialized and spinning..')
 
 
 while True:
-   # fire a THREAD
-   # new_thread = threading.Thread(target=handle_client,args=(conn,))  # mulit-threading
-   # new_thread.start()
-   # pool.submit(handle_client,conn)
-
-   # thread asks OS demulitplexer for events that are now ready...
    ready_events = demultiplexer.select()
 
    # now that kernel has handed you the tasks from demulitplexer lets see
@@ -78,4 +65,4 @@ while True:
 
       sock = key.fileobj # this gets the actual socket object
 
-      callable(sock)  # runs the callback syncly on our main thread
+      callback(sock)  # runs the callback syncly on our main thread
