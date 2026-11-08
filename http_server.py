@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor
 import selectors
 
 
-
 # initialize a socket obj
 so = socket.socket()
 so.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
@@ -62,7 +61,6 @@ while True:
    # now that kernel has handed you the tasks from demulitplexer lets see
    for key,mask in ready_events:
       callback = key.data # this gets the function call accept_new_connections or handle_client
-
       sock = key.fileobj # this gets the actual socket object
 
       callback(sock)  # runs the callback syncly on our main thread
