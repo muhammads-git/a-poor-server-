@@ -1,0 +1,74 @@
+
+High-Performance Hybrid Async TCP Server
+
+A custom, low-level HTTP/TCP server built from scratch in Python to map the physical and logical boundaries between User Space Application Code, Thread Scheduling, and Operating System Kernel Multiplexing.
+This project tracks the architectural shift from traditional thread-per-request chaos to a disciplined single-threaded asynchronous Event Loop backed by a tightly-capped hybrid Thread Pool.
+
+System Architecture & File Layout
+
+The codebase splits the architecture into three decoupled logical layers to isolate responsibilities:
+async_event_loop/
+│
+├── config.py     # Infrastructure Layer (Capped Worker Pools)
+├── handlers.py   # Business Logic Layer (Non-blocking I/O & Deferrals)
+└── main.py       # Operating System Boot Layer (Socket Primitives)
+
+1. config.py — The Infrastructure Layer
+
+Owns and bounds the physical worker ecosystem. Instead of spawning infinite threads dynamically under load, it establishes a disciplined, fixed squad of threads matching the physical core count of the machine.
+
+2. handlers.py — The Business Logic Layer
+
+Manages data processing. Sockets are treated as non-blocking memory buffers. Legitimate heavy computation tasks or indivisible 2-second blocking lookups are decoupled from the main execution line and offloaded to the worker pool.
+
+3. main.py — The OS Boot Layer
+
+Initializes the primitive socket, binds the address, sets a 1000-size handshake backlog queue at the kernel level, strips the blocking power via setblocking(False), and mounts it inside the native multiplexer event loop engine.
+
+Core Engineering Learnings & Insights
+
+
+1. The Thread Creation Friction
+
+Traditional thread-per-request models create a native OS thread descriptor and allocate an isolated execution stack (typically 1MB) for every incoming connection. Under a burst load of 1,000 requests, the kernel chokes on system calls (clone/pthread_create), and the CPU wastes nearly all its clock cycles saving and restoring thread registers (Savage Context-Switching Thrashing) instead of executing business logic. This manifests as WinError 10061 (Connection actively refused).
+
+2. The Fallacy of the Synchronous Event Loop
+
+Moving to a single-threaded loop with non-blocking sockets fixes context switching, but introduces a fragile execution contract. Because execution is sequential, if any callback blocks, the entire server flatlines. Even a simple print() statement forces the single thread to stop and wait for synchronous terminal I/O. While the thread is trapped printing text, it cannot return to poll the system; the kernel backlog buffer overflows, and the front door slams shut on subsequent clients.
+
+3. The True Mechanics of async/await
+
+async/await does not physically execute code or bypass the need for CPU cores. A thread is always required to push instructions through logic gates. Instead, await acts as an architectural escape hatch:
+• When a slow I/O wait or heavy background task is reached, await pauses the function frame.
+• It actively strips the local variables off the single execution stack and packages them onto the global Memory Heap.
+• It frees the single main thread to immediately return to the loop tick (selectors.select()) to handle other traffic.
+• When the hardware interrupt signals completion, the main thread fetches the box from the heap, repopulates the execution stack, and resumes the exact line after the token synchronously.
+
+Performance Metrics (The Visual Shift)
+
+• Thread-per-Request Blast: Massive drops, high failure rates, memory spikes, latencies fluctuating wildly from milliseconds up to several seconds due to OS-level thread thrashing.
+• Synchronous Selector Loop (with Print Bottlenecks): High connection refusal rate once the sequential loop block got trapped inside text formatting pipelines.
+• Hybrid Async / Thread-Pool Loop: Flatlined latency curves, consistent microsecond network processing pipelines, and deterministic 2-second processing step-downs for queued worker tasks with 0 dropped packets.
+
+Future Improvements & Scaling Vector
+
+
+1. Shifting from Threads to Process Isolation (The Multi-Core Leap)
+
+Due to Python's Global Interpreter Lock (GIL), even with a ThreadPoolExecutor, background worker threads are restricted to a single CPU core when executing Python bytecode. To maximize true hardware parallelism for heavy computations, the infrastructure layer should migrate to a ProcessPoolExecutor, creating isolated Operating System processes with their own memory spaces across all available cores.
+
+2. Implementing Edge-Triggered Polling (epoll/kqueue)
+
+While selectors.DefaultSelector maps to the best available OS multiplexer, deploying the system natively on Linux allows hardcoding select.epoll using Edge-Triggered flags. This changes the kernel polling efficiency from O(N) (scanning the array of active file descriptors) to O(1) (the kernel immediately notifying the loop via a dedicated ready-list), allowing the server to handle hundreds of thousands of concurrent idle sockets.
+
+3. Zero-Copy User-Space Networking
+
+Currently, calling .read() or .recv() forces the CPU to run context transitions, physically copying bytes out of Kernel Space network buffers into User Space Python heap structures. Integrating direct memory mapping blocks or memoryviews would allow the parsing engine to read packet bytes directly out of shared ring buffers, eliminating the CPU cycle cost of redundant memory copying.
+
+How to Boot the System
+
+Ensure you are standing in the parent project directory (low-level), and run the server module using the package flag to preserve path resolution:
+bash
+python -m async_event_loop.main
+Use code with caution.
+To stress test it, launch your concurrent connection script (bomber.py) in an adjacent terminal window and evaluate the flatlined latency outputs
