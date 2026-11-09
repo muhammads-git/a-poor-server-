@@ -88,3 +88,6 @@ async def handle_client(reader, writer):
         # Ensure the socket stream closes without causing leakage
         writer.close()
         await writer.wait_closed()
+
+
+# ok it has still some issues while executing and handling requests but we will surely see it
